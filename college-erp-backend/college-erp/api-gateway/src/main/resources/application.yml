@@ -1,0 +1,137 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # Auth Service
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=0
+
+        # Student Service
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/api/students/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Faculty Service
+        - id: faculty-service
+          uri: lb://faculty-service
+          predicates:
+            - Path=/api/faculty/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Attendance Service
+        - id: attendance-service
+          uri: lb://attendance-service
+          predicates:
+            - Path=/api/attendance/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Marks Service
+        - id: marks-service
+          uri: lb://marks-service
+          predicates:
+            - Path=/api/marks/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Course Service
+        - id: course-service
+          uri: lb://course-service
+          predicates:
+            - Path=/api/courses/**,/api/departments/**,/api/subjects/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Notification Service
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Face Recognition Service
+        - id: face-recognition-service
+          uri: lb://face-recognition-service
+          predicates:
+            - Path=/api/face/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Parent Service
+        - id: parent-service
+          uri: lb://parent-service
+          predicates:
+            - Path=/api/parents/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # Admin Service
+        - id: admin-service
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-secret@localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: 4e3b2a1d0c9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d
+  expiration: 86400000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
