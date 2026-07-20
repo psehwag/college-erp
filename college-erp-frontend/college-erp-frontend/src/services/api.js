@@ -157,6 +157,7 @@ export const adminAPI = {
 
 // ── Parents ───────────────────────────────────────────────────────────────
 export const parentAPI = {
+  getAll:  (page=0, size=20) => api.get(`/parents?page=${page}&size=${size}`),
   getMe:   ()        => api.get('/parents/me'),
   getById: id        => api.get(`/parents/${id}`),
   create:  d         => api.post('/parents', d),

@@ -18,14 +18,24 @@ export default function ParentDashboard() {
   const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
-    if (!parentId) return;
+    // referenceId links this user to their parent record
+    // If it is null, the account was seeded without a parent record
+    if (!parentId) {
+      setLoading(false);
+      return;
+    }
     studentAPI.getByParent(parentId)
       .then(r => {
         const list = r.data.data || [];
         setChildren(list);
         if (list.length === 1) setSelected(list[0]);
       })
-      .catch(() => toast.error('Failed to load children data'))
+      .catch(err => {
+        // 403 = correct parent but no students linked yet — not an error
+        if (err.response?.status !== 403) {
+          toast.error('Failed to load children data');
+        }
+      })
       .finally(() => setLoading(false));
   }, [parentId]);
 
@@ -53,9 +63,20 @@ export default function ParentDashboard() {
   );
 
   if (children.length === 0) return (
-    <div className="empty-state card" style={{ marginTop:40 }}>
-      <div className="empty-icon">👨‍👩‍👧</div>
-      <p>No students linked to your account yet. Contact the administrator.</p>
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h2>Parent Portal</h2>
+        </div>
+      </div>
+      <div className="empty-state card" style={{ marginTop:20 }}>
+        <div className="empty-icon">👨‍👩‍👧</div>
+        <p style={{ fontWeight:600, marginBottom:8 }}>No students linked to your account yet.</p>
+        <p style={{ fontSize:13, color:'var(--text-muted)' }}>
+          Ask the administrator to go to <strong>Parents → Link students</strong>
+          and link your child's record to your account.
+        </p>
+      </div>
     </div>
   );
 
