@@ -56,7 +56,7 @@ export default function AttendancePage() {
         subjectId: +selected.subjectId,
         batchId: +selected.batchId,
         attendanceDate: date,
-        studentAttendances: students.map(s => ({ studentId: s.id, status: records[s.id] || 'ABSENT' }))
+        studentMarks: students.map(s => ({ studentId: s.id, status: records[s.id] || 'ABSENT' }))
       });
       toast.success(`Attendance marked for ${students.length} students`);
     } catch (err) {

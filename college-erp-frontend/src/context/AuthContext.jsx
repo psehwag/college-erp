@@ -10,19 +10,19 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const stored = localStorage.getItem('user');
     if (stored) {
-      try { setUser(JSON.parse(stored)); } catch {}
+      try { setUser(JSON.parse(stored)); } catch { localStorage.clear(); }
     }
     setLoading(false);
   }, []);
 
-  const login = async (credentials) => {
+  const login = async credentials => {
     const { data } = await authAPI.login(credentials);
     const { accessToken, refreshToken, user: u } = data.data;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     localStorage.setItem('user', JSON.stringify(u));
     setUser(u);
-    return u;
+    return u; // caller checks u.mustChangePassword
   };
 
   const logout = async () => {
@@ -31,8 +31,15 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Called after user changes password — clears the flag
+  const clearMustChange = () => {
+    const updated = { ...user, mustChangePassword: false };
+    localStorage.setItem('user', JSON.stringify(updated));
+    setUser(updated);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, clearMustChange }}>
       {children}
     </AuthContext.Provider>
   );

@@ -16,6 +16,12 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(form);
+      // If first-time login (auto-created account), force password change
+      if (user.mustChangePassword) {
+        toast('Please set a new password before continuing.', { icon: '🔐' });
+        nav('/change-password');
+        return;
+      }
       toast.success(`Welcome back, ${user.username}!`);
       nav(roleHome[user.role] || '/');
     } catch (err) {
@@ -58,7 +64,7 @@ export default function LoginPage() {
           <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:16 }}>
             <div className="form-group">
               <label className="form-label">Username or email</label>
-              <input className="form-input" placeholder="admin or admin@college.edu"
+              <input className="form-input" placeholder="admin"
                 value={form.usernameOrEmail}
                 onChange={e => setForm(f => ({ ...f, usernameOrEmail: e.target.value }))}
                 required />
@@ -70,16 +76,19 @@ export default function LoginPage() {
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required />
             </div>
-            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center', padding:'11px' }}
+            <button className="btn btn-primary"
+              style={{ width:'100%', justifyContent:'center', padding:'11px' }}
               disabled={loading}>
               {loading ? <span className="spinner" /> : 'Sign in'}
             </button>
           </form>
 
-          <div style={{ marginTop:28, padding:16, background:'#F8F9FC', borderRadius:8, fontSize:12.5, color:'#6B7280' }}>
+          <div style={{ marginTop:28, padding:16, background:'#F8F9FC', borderRadius:8,
+            fontSize:12.5, color:'#6B7280' }}>
             <strong style={{ display:'block', marginBottom:6, color:'#374151' }}>Demo credentials</strong>
-            admin / Password@123 · faculty1 / Password@123<br />
-            student1 / Password@123 · parent1 / Password@123
+            admin / Password@123<br />
+            faculty1 / Password@123 · student1 / Password@123<br />
+            parent1 / Password@123
           </div>
         </div>
       </div>
