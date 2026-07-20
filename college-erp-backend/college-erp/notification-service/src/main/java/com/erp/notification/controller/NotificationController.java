@@ -1,63 +1,71 @@
 package com.erp.notification.controller;
 
-import com.erp.notification.dto.NotificationDto;
-import com.erp.notification.service.NotificationService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import com.erp.notification.entity.Notification;
+import com.erp.notification.repository.NotificationRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.http.*;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications")
-@RequiredArgsConstructor
-@Tag(name = "Notifications", description = "In-app and email notification endpoints")
+@Transactional
 public class NotificationController {
 
-    private final NotificationService notificationService;
+    private final NotificationRepository notifRepo;
 
-    @PostMapping("/send")
-    @Operation(summary = "Send a direct notification (admin use)")
-    public ResponseEntity<NotificationDto.ApiResponse<NotificationDto.Response>> send(
-            @Valid @RequestBody NotificationDto.SendRequest req) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(NotificationDto.ApiResponse.success("Notification sent",
-                        notificationService.sendDirect(req)));
+    public NotificationController(NotificationRepository notifRepo) {
+        this.notifRepo = notifRepo;
     }
 
     @GetMapping
-    @Operation(summary = "Get notifications for current user")
-    public ResponseEntity<NotificationDto.ApiResponse<Page<NotificationDto.Response>>> getMyNotifications(
+    @Transactional(readOnly = true)
+    public ResponseEntity<Map<String, Object>> getMyNotifications(
             @RequestHeader("X-User-Id") Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(NotificationDto.ApiResponse.success("Notifications fetched",
-                notificationService.getNotifications(userId, page, size)));
+        Page<Notification> notifications =
+                notifRepo.findByRecipientIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size));
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("data",    notifications.getContent());
+        resp.put("total",   notifications.getTotalElements());
+        return ResponseEntity.ok(resp);
     }
 
     @GetMapping("/unread-count")
-    @Operation(summary = "Get unread notification count")
-    public ResponseEntity<NotificationDto.ApiResponse<Long>> getUnreadCount(
+    @Transactional(readOnly = true)
+    public ResponseEntity<Map<String, Object>> getUnreadCount(
             @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(NotificationDto.ApiResponse.success("Unread count",
-                notificationService.getUnreadCount(userId)));
+        long count = notifRepo.countByRecipientIdAndIsReadFalse(userId);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("data",    count);
+        return ResponseEntity.ok(resp);
     }
 
     @PatchMapping("/{id}/read")
-    @Operation(summary = "Mark a notification as read")
-    public ResponseEntity<NotificationDto.ApiResponse<Void>> markAsRead(
-            @PathVariable Long id, @RequestHeader("X-User-Id") Long userId) {
-        notificationService.markAsRead(id, userId);
-        return ResponseEntity.ok(NotificationDto.ApiResponse.success("Marked as read", null));
+    public ResponseEntity<Map<String, Object>> markRead(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId) {
+        notifRepo.markOneRead(id, userId);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "Marked as read");
+        return ResponseEntity.ok(resp);
     }
 
     @PatchMapping("/read-all")
-    @Operation(summary = "Mark all notifications as read")
-    public ResponseEntity<NotificationDto.ApiResponse<Void>> markAllRead(
+    public ResponseEntity<Map<String, Object>> markAllRead(
             @RequestHeader("X-User-Id") Long userId) {
-        notificationService.markAllRead(userId);
-        return ResponseEntity.ok(NotificationDto.ApiResponse.success("All marked as read", null));
+        notifRepo.markAllRead(userId);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "All marked as read");
+        return ResponseEntity.ok(resp);
     }
 }

@@ -11,60 +11,24 @@ spring:
           enabled: true
           lower-case-service-id: true
       routes:
-        # Auth Service
-        - id: auth-service
-          uri: lb://auth-service
+        # Public auth endpoints - no JWT required
+        - id: auth-public
+          uri: lb://college-erp-service
           predicates:
-            - Path=/api/auth/**
+            - Path=/api/auth/login,/api/auth/refresh-token
           filters:
             - StripPrefix=0
 
-        # Student Service
-        - id: student-service
-          uri: lb://student-service
+        # All protected ERP routes
+        - id: erp-protected
+          uri: lb://college-erp-service
           predicates:
-            - Path=/api/students/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Faculty Service
-        - id: faculty-service
-          uri: lb://faculty-service
-          predicates:
-            - Path=/api/faculty/**
+            - Path=/api/**
           filters:
             - StripPrefix=0
             - name: JwtAuthFilter
 
-        # Attendance Service
-        - id: attendance-service
-          uri: lb://attendance-service
-          predicates:
-            - Path=/api/attendance/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Marks Service
-        - id: marks-service
-          uri: lb://marks-service
-          predicates:
-            - Path=/api/marks/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Course Service
-        - id: course-service
-          uri: lb://course-service
-          predicates:
-            - Path=/api/courses/**,/api/departments/**,/api/subjects/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Notification Service
+        # Notification service
         - id: notification-service
           uri: lb://notification-service
           predicates:
@@ -73,65 +37,35 @@ spring:
             - StripPrefix=0
             - name: JwtAuthFilter
 
-        # Face Recognition Service
-        - id: face-recognition-service
-          uri: lb://face-recognition-service
-          predicates:
-            - Path=/api/face/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Parent Service
-        - id: parent-service
-          uri: lb://parent-service
-          predicates:
-            - Path=/api/parents/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
-        # Admin Service
-        - id: admin-service
-          uri: lb://admin-service
-          predicates:
-            - Path=/api/admin/**
-          filters:
-            - StripPrefix=0
-            - name: JwtAuthFilter
-
       globalcors:
         corsConfigurations:
           '[/**]':
-            allowedOrigins: "*"
+            allowedOriginPatterns:
+              - "*"
             allowedMethods:
               - GET
               - POST
               - PUT
+              - PATCH
               - DELETE
               - OPTIONS
-            allowedHeaders: "*"
+            allowedHeaders:
+              - "*"
+            allowCredentials: false
 
 eureka:
   client:
     service-url:
-      defaultZone: http://eureka:eureka-secret@localhost:8761/eureka/
+      defaultZone: http://eureka:eureka-secret@erp-eureka:8761/eureka/
   instance:
     prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
 
 jwt:
   secret: 4e3b2a1d0c9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d
-  expiration: 86400000
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
-  endpoint:
-    gateway:
-      enabled: true
-
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
+        include: health,info

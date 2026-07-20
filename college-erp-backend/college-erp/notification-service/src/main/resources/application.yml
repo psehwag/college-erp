@@ -1,11 +1,11 @@
 server:
-  port: 8087
+  port: 8082
 
 spring:
   application:
     name: notification-service
   datasource:
-    url: jdbc:mysql://localhost:3306/erp_notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://erp-mysql:3306/erp_notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,14 +16,16 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: erp-kafka:9092
     consumer:
       group-id: notification-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.erp.*"
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
   mail:
     host: smtp.gmail.com
     port: 587
@@ -39,13 +41,10 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://eureka:eureka-secret@localhost:8761/eureka/
+      defaultZone: http://eureka:eureka-secret@erp-eureka:8761/eureka/
   instance:
     prefer-ip-address: true
-
-springdoc:
-  api-docs:
-    path: /api-docs
+    lease-renewal-interval-in-seconds: 10
 
 management:
   endpoints:

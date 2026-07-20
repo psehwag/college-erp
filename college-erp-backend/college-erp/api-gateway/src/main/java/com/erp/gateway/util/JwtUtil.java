@@ -1,18 +1,19 @@
 package com.erp.gateway.util;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
+import java.util.logging.Logger;
 
 @Component
-@Slf4j
 public class JwtUtil {
+
+    private static final Logger log = Logger.getLogger(JwtUtil.class.getName());
 
     @Value("${jwt.secret}")
     private String secret;
@@ -23,21 +24,12 @@ public class JwtUtil {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
-                    .build()
-                    .parseClaimsJws(token);
+            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
             return true;
-        } catch (ExpiredJwtException e) {
-            log.warn("JWT token is expired");
-        } catch (UnsupportedJwtException e) {
-            log.warn("JWT token is unsupported");
-        } catch (MalformedJwtException e) {
-            log.warn("JWT token is malformed");
         } catch (Exception e) {
-            log.warn("JWT validation error: {}", e.getMessage());
+            log.warning("JWT validation failed: " + e.getMessage());
+            return false;
         }
-        return false;
     }
 
     public Claims extractAllClaims(String token) {
@@ -60,7 +52,8 @@ public class JwtUtil {
         return extractAllClaims(token).get("userId", String.class);
     }
 
-    public boolean isTokenExpired(String token) {
-        return extractAllClaims(token).getExpiration().before(new Date());
+    public String extractReferenceId(String token) {
+        Object ref = extractAllClaims(token).get("referenceId");
+        return ref != null ? ref.toString() : "";
     }
 }

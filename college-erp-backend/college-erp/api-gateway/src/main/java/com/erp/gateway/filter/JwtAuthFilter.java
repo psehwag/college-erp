@@ -1,7 +1,6 @@
 package com.erp.gateway.filter;
 
 import com.erp.gateway.util.JwtUtil;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
@@ -13,18 +12,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
+import java.util.logging.Logger;
 
 @Component
-@Slf4j
 public class JwtAuthFilter extends AbstractGatewayFilterFactory<JwtAuthFilter.Config> {
 
-    private static final List<String> PUBLIC_ENDPOINTS = List.of(
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/refresh-token",
-            "/actuator"
-    );
+    private static final Logger log = Logger.getLogger(JwtAuthFilter.class.getName());
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -37,53 +30,45 @@ public class JwtAuthFilter extends AbstractGatewayFilterFactory<JwtAuthFilter.Co
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             ServerHttpRequest request = exchange.getRequest();
-            String path = request.getURI().getPath();
-
-            if (isPublicEndpoint(path)) {
-                return chain.filter(exchange);
-            }
 
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
-                return onError(exchange, "Missing Authorization header", HttpStatus.UNAUTHORIZED);
+                return onError(exchange, HttpStatus.UNAUTHORIZED);
             }
 
             String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return onError(exchange, "Invalid Authorization header format", HttpStatus.UNAUTHORIZED);
+                return onError(exchange, HttpStatus.UNAUTHORIZED);
             }
 
             String token = authHeader.substring(7);
+
             try {
                 if (!jwtUtil.validateToken(token)) {
-                    return onError(exchange, "Invalid or expired token", HttpStatus.UNAUTHORIZED);
+                    return onError(exchange, HttpStatus.UNAUTHORIZED);
                 }
 
-                String username = jwtUtil.extractUsername(token);
-                String role = jwtUtil.extractRole(token);
-                String userId = jwtUtil.extractUserId(token);
+                String username    = jwtUtil.extractUsername(token);
+                String role        = jwtUtil.extractRole(token);
+                String userId      = jwtUtil.extractUserId(token);
+                String referenceId = jwtUtil.extractReferenceId(token);
 
-                ServerHttpRequest modifiedRequest = request.mutate()
-                        .header("X-User-Name", username)
-                        .header("X-User-Role", role)
-                        .header("X-User-Id", userId)
+                ServerHttpRequest modified = request.mutate()
+                        .header("X-User-Name", username != null ? username : "")
+                        .header("X-User-Role", role != null ? role : "")
+                        .header("X-User-Id", userId != null ? userId : "")
+                        .header("X-Reference-Id", referenceId != null ? referenceId : "")
                         .build();
 
-                log.debug("Authenticated user: {} with role: {}", username, role);
-                return chain.filter(exchange.mutate().request(modifiedRequest).build());
+                return chain.filter(exchange.mutate().request(modified).build());
 
             } catch (Exception e) {
-                log.error("JWT validation error: {}", e.getMessage());
-                return onError(exchange, "JWT validation failed", HttpStatus.UNAUTHORIZED);
+                log.severe("JWT filter error: " + e.getMessage());
+                return onError(exchange, HttpStatus.UNAUTHORIZED);
             }
         };
     }
 
-    private boolean isPublicEndpoint(String path) {
-        return PUBLIC_ENDPOINTS.stream().anyMatch(path::startsWith);
-    }
-
-    private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
-        log.warn("Auth error: {}", message);
+    private Mono<Void> onError(ServerWebExchange exchange, HttpStatus status) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(status);
         return response.setComplete();

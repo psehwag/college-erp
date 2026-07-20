@@ -1,405 +1,244 @@
-# Smart College ERP Lite
-### AI-Based Face Recognition Attendance System — Backend
-
-A production-ready microservices backend built with **Java 17 + Spring Boot 3.2 + Spring Cloud**.
+# Smart College ERP v2
+### 4-Service Architecture · No Lombok · Full RBAC · KRaft Kafka
 
 ---
 
-## Architecture Overview
+## Architecture
 
 ```
-React Frontend
+React Frontend :3000
       │
       ▼
-┌─────────────────────────────────────────┐
-│           API Gateway  :8080            │  ◄─ JWT validation, routing, CORS
-└─────────────────────────────────────────┘
+API Gateway :8080  (JWT validation, routing, CORS)
       │
-      ├── /api/auth/**        → Auth Service        :8081
-      ├── /api/students/**    → Student Service     :8082
-      ├── /api/faculty/**     → Faculty Service     :8083
-      ├── /api/attendance/**  → Attendance Service  :8084
-      ├── /api/marks/**       → Marks Service       :8085
-      ├── /api/courses/**     → Course Service      :8086
-      ├── /api/notifications/** → Notification Svc  :8087
-      ├── /api/parents/**     → Parent Service      :8088
-      ├── /api/admin/**       → Admin Service       :8089
-      └── /api/face/**        → Face Recognition    :8090
+      ├──► college-erp-service :8081  (all business logic, MySQL erp_main)
+      └──► notification-service :8082 (Kafka consumer, email, MySQL erp_notifications)
 
-All services register with:
-  Eureka Discovery Server  :8761
-
-Async events via:
-  Apache Kafka  :9092
-  Topics: attendance-events | marks-events | general-events
-
-Databases:
-  MySQL :3306  (one schema per service)
+Service discovery: Eureka :8761
+Kafka (KRaft, no Zookeeper): :9092
+Kafka UI: :8888
 ```
 
 ---
 
-## Service Port Map
+## Services
 
-| Service                | Port | Database         |
-|------------------------|------|------------------|
-| Eureka Server          | 8761 | —                |
-| API Gateway            | 8080 | —                |
-| Auth Service           | 8081 | erp_auth         |
-| Student Service        | 8082 | erp_students     |
-| Faculty Service        | 8083 | erp_faculty      |
-| Attendance Service     | 8084 | erp_attendance   |
-| Marks Service          | 8085 | erp_marks        |
-| Course Service         | 8086 | erp_courses      |
-| Notification Service   | 8087 | erp_notifications|
-| Parent Service         | 8088 | erp_parents      |
-| Admin Service          | 8089 | —                |
-| Face Recognition       | 8090 | erp_face         |
-| Kafka UI               | 8888 | —                |
-
----
-
-## Prerequisites
-
-- Java 17+
-- Maven 3.8+
-- Docker & Docker Compose
-- MySQL 8.0 (if running locally without Docker)
+| Service | Port | Database |
+|---|---|---|
+| Eureka Server | 8761 | — |
+| API Gateway | 8080 | — |
+| college-erp-service | 8081 | erp_main |
+| notification-service | 8082 | erp_notifications |
+| Kafka UI | 8888 | — |
 
 ---
 
 ## Quick Start
 
-### Option A — Docker Compose (recommended)
-
 ```bash
-# 1. Clone and navigate
-git clone <repo-url> && cd college-erp
-
-# 2. (Optional) Set email credentials for notifications
-export MAIL_USERNAME=your-email@gmail.com
-export MAIL_PASSWORD=your-app-password
-
-# 3. Start everything
+# From college-erp-v2 folder:
 docker-compose up -d
 
-# 4. Watch startup
-docker-compose logs -f
+# Watch logs
+docker-compose logs -f college-erp-service
 ```
 
-Wait ~90 seconds for all services to register with Eureka.
-
-### Option B — Local Development
+Wait ~3 minutes on first start. Then:
 
 ```bash
-# Start infrastructure only
-docker-compose up -d mysql zookeeper kafka kafka-ui
-
-# Build all modules
-mvn clean package -DskipTests
-
-# Start services in order (each in a separate terminal)
-cd eureka-server   && mvn spring-boot:run
-cd api-gateway     && mvn spring-boot:run
-cd auth-service    && mvn spring-boot:run
-cd course-service  && mvn spring-boot:run
-cd student-service && mvn spring-boot:run
-cd faculty-service && mvn spring-boot:run
-# ... etc
+# Test login
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"usernameOrEmail":"admin","password":"Password@123"}'
 ```
 
 ---
 
 ## Default Credentials
 
-All default users share the password: **`Password@123`**
+All default password: **Password@123**
 
-| Role    | Username  | Email                    |
-|---------|-----------|--------------------------|
-| Admin   | admin     | admin@college.edu        |
-| Faculty | faculty1  | faculty1@college.edu     |
-| Student | student1  | student1@college.edu     |
-| Parent  | parent1   | parent1@gmail.com        |
+| Role | Username | Note |
+|---|---|---|
+| ADMIN | admin | Can create all users |
+| FACULTY | faculty1, faculty2 | Must change password on login |
+| STUDENT | student1 | Must change password on login |
+| PARENT | parent1 | Must change password on login |
 
 ---
 
-## API Quick Reference
+## Role-Based Access Control
 
-All requests go through the **API Gateway at `http://localhost:8080`**.
+| Action | ADMIN | FACULTY | STUDENT | PARENT |
+|---|---|---|---|---|
+| Create student | ✅ | ❌ | ❌ | ❌ |
+| Create faculty | ✅ | ❌ | ❌ | ❌ |
+| Create parent | ✅ | ❌ | ❌ | ❌ |
+| Create admin user | ✅ | ❌ | ❌ | ❌ |
+| Reset any user's password | ✅ | ❌ | ❌ | ❌ |
+| Change own password | ✅ | ✅ | ✅ | ✅ |
+| View all students | ✅ | ✅ | Own only | Own child |
+| Mark attendance | ✅ | ✅ | ❌ | ❌ |
+| Upload marks | ✅ | ✅ | ❌ | ❌ |
+| View marks/attendance | ✅ | ✅ | Own only | Own child |
+| Admin dashboard | ✅ | ❌ | ❌ | ❌ |
+| Broadcast notifications | ✅ | ❌ | ❌ | ❌ |
+| Face enroll/train | ✅ | ❌ | ❌ | ❌ |
 
-### Authentication
+---
 
-```bash
-# Login
+## Key API Endpoints
+
+### Auth (public)
+```
 POST /api/auth/login
-{
-  "usernameOrEmail": "admin",
-  "password": "Password@123"
-}
-# Returns: { "accessToken": "eyJ...", "refreshToken": "..." }
-
-# Use the token in all subsequent requests:
-Authorization: Bearer <accessToken>
-
-# Refresh token
 POST /api/auth/refresh-token
-{ "refreshToken": "..." }
-
-# Change password
-POST /api/auth/change-password
-{ "currentPassword": "...", "newPassword": "..." }
 ```
 
-### Course Setup (Admin — do this first)
-
-```bash
-# Create department
-POST /api/departments
-{ "name": "Computer Science", "code": "CS" }
-
-# Create course
-POST /api/courses
-{ "name": "B.Tech CSE", "code": "BTECH-CS", "departmentId": 1, "totalSemesters": 8, "durationYears": 4 }
-
-# Create subject
-POST /api/subjects
-{ "name": "Data Structures", "code": "CS201", "courseId": 1, "departmentId": 1, "semester": 2, "credits": 4, "totalLectures": 60 }
-
-# Create batch
-POST /api/courses/batches
-{ "name": "CS-A-2024", "courseId": 1, "departmentId": 1, "academicYear": "2024-25", "currentSemester": 1, "maxStrength": 60 }
+### Auth (authenticated)
+```
+POST /api/auth/logout
+POST /api/auth/change-password          — any user, own password
+POST /api/auth/admin/reset-password     — ADMIN only
+POST /api/auth/admin/create-admin       — ADMIN only
+PATCH /api/auth/admin/users/{id}/active — ADMIN only
 ```
 
-### Student Management
-
-```bash
-# Add student
-POST /api/students
-{ "firstName": "John", "lastName": "Doe", "email": "john@college.edu",
-  "departmentId": 1, "courseId": 1, "batchId": 1, "currentSemester": 1, "admissionYear": 2024 }
-
-# Search students
-GET /api/students/search?q=john&page=0&size=10
-
-# Get students in a batch
-GET /api/students/batch/1
+### Students (ADMIN creates, others view)
+```
+POST   /api/students          — ADMIN only (auto-creates login)
+GET    /api/students          — ADMIN, FACULTY
+GET    /api/students/{id}     — ADMIN, FACULTY, own STUDENT
+PUT    /api/students/{id}     — ADMIN, own STUDENT
+DELETE /api/students/{id}     — ADMIN only
+GET    /api/students/search?q=
+GET    /api/students/batch/{batchId}
+GET    /api/students/parent/{parentId}
 ```
 
-### Faculty & Subject Assignment
-
-```bash
-# Add faculty
-POST /api/faculty
-{ "firstName": "Dr. Priya", "lastName": "Sharma", "email": "priya@college.edu", "departmentId": 1 }
-
-# Assign faculty to subject + batch
-POST /api/faculty/assignments
-{ "facultyId": 1, "subjectId": 2, "batchId": 1, "academicYear": "2024-25", "semester": 1 }
-
-# Get faculty assignments
-GET /api/faculty/1/assignments
+### Faculty (ADMIN creates)
+```
+POST   /api/faculty           — ADMIN only (auto-creates login)
+GET    /api/faculty           — ADMIN, FACULTY
+PUT    /api/faculty/{id}      — ADMIN, own FACULTY
+DELETE /api/faculty/{id}      — ADMIN only
+POST   /api/faculty/assignments        — ADMIN only
+GET    /api/faculty/{id}/assignments   — ADMIN, FACULTY
 ```
 
-### Attendance (Manual)
-
-```bash
-# Mark attendance for a batch
-POST /api/attendance/bulk
-{
-  "facultyId": 1, "subjectId": 2, "batchId": 1,
-  "attendanceDate": "2024-11-15",
-  "studentAttendances": [
-    { "studentId": 1, "status": "PRESENT" },
-    { "studentId": 2, "status": "ABSENT", "remarks": "Medical leave" }
-  ]
-}
-
-# Get attendance percentage
-GET /api/attendance/student/1/subject/2/percentage
-
-# Get defaulters (below 75%)
-GET /api/attendance/subject/2/defaulters?threshold=75.0
+### Parents (ADMIN creates)
+```
+POST   /api/parents           — ADMIN only (auto-creates login)
+GET    /api/parents/{id}      — ADMIN, own PARENT
+GET    /api/parents/me        — PARENT (own profile)
+PUT    /api/parents/{id}      — ADMIN, own PARENT
+DELETE /api/parents/{id}      — ADMIN only
 ```
 
-### Face Recognition Attendance (AI)
+### Courses (ADMIN manages, others read)
+```
+POST /api/departments         — ADMIN only
+GET  /api/departments         — all
+POST /api/courses             — ADMIN only
+POST /api/subjects            — ADMIN only
+POST /api/courses/batches     — ADMIN only
+GET  /api/courses/{id}/subjects?semester=1
+GET  /api/departments/{id}/batches
+```
 
-```bash
-# Step 1 — Enroll student face (Admin)
-POST /api/face/enroll/1          # multipart/form-data
-  photos: [file1.jpg, file2.jpg, ..., file10.jpg]  # 5-10 photos recommended
-
-# Step 2 — Train model for the batch (Faculty/Admin)
-POST /api/face/train
-{ "batchId": 1, "studentIds": [1, 2, 3, 4, 5] }
-
-# Step 3 — Start session (Faculty)
-POST /api/attendance/session/start
-{ "facultyId": 1, "subjectId": 2, "batchId": 1 }
-# Returns sessionToken
-
-# Step 4 — Recognize face (per webcam frame, from frontend)
-POST /api/face/recognize
-{
-  "batchId": 1, "subjectId": 2, "facultyId": 1,
-  "sessionToken": "abc123...",
-  "frameBase64": "data:image/jpeg;base64,/9j/4AAQ..."
-}
-# Returns: { "recognized": true, "studentId": 3, "confidenceScore": 91.5 }
-
-# Step 5 — Mark attendance (called by frontend after recognition)
-POST /api/attendance/face-recognition
-{ "studentId": 3, "subjectId": 2, "facultyId": 1, "batchId": 1,
-  "confidenceScore": 91.5, "sessionToken": "abc123..." }
-
-# Step 6 — End session
-PATCH /api/attendance/session/1/end
+### Attendance
+```
+POST  /api/attendance/bulk               — ADMIN, FACULTY
+POST  /api/attendance/face               — ADMIN, FACULTY
+POST  /api/attendance/session/start      — ADMIN, FACULTY
+PATCH /api/attendance/session/{id}/end  — ADMIN, FACULTY
+GET   /api/attendance/student/{id}      — own STUDENT, ADMIN, FACULTY
+GET   /api/attendance/student/{id}/subject/{id}/percentage
+GET   /api/attendance/subject/{id}/defaulters  — ADMIN, FACULTY
 ```
 
 ### Marks
-
-```bash
-# Upload marks for entire batch at once
-POST /api/marks/bulk
-{
-  "subjectId": 2, "facultyId": 1, "batchId": 1, "semester": 1,
-  "examType": "INTERNAL_1", "maxMarks": 30, "academicYear": "2024-25",
-  "studentMarks": [
-    { "studentId": 1, "marksObtained": 27 },
-    { "studentId": 2, "marksObtained": 22, "remarks": "Absent for unit 3" }
-  ]
-}
-
-# Student semester summary
-GET /api/marks/student/1/semester/1/summary
+```
+POST /api/marks               — ADMIN, FACULTY
+POST /api/marks/bulk          — ADMIN, FACULTY
+GET  /api/marks/student/{id}  — own STUDENT, PARENT, ADMIN, FACULTY
+GET  /api/marks/student/{id}/semester/{sem}/summary
+GET  /api/marks/batch/{id}/subject/{id}?examType=INTERNAL_1
 ```
 
-### Dashboards
-
-```bash
-GET /api/admin/dashboard                    # Admin stats
-GET /api/admin/dashboard/faculty/1          # Faculty dashboard
-GET /api/admin/dashboard/student/1          # Student dashboard
-GET /api/admin/reports/defaulters/subject/2 # Defaulter list
-POST /api/admin/broadcast?title=Holiday&message=College closed tomorrow&targetRole=STUDENT
+### Admin
+```
+GET  /api/admin/dashboard                          — ADMIN only
+GET  /api/admin/reports/defaulters/subject/{id}    — ADMIN only
+POST /api/admin/broadcast?title=&message=&targetRole=  — ADMIN only
 ```
 
 ### Notifications
-
-```bash
-GET /api/notifications?page=0&size=20       # My notifications
-GET /api/notifications/unread-count
-PATCH /api/notifications/5/read
+```
+GET   /api/notifications?page=0&size=20
+GET   /api/notifications/unread-count
+PATCH /api/notifications/{id}/read
 PATCH /api/notifications/read-all
 ```
 
 ---
 
-## Swagger UI (per service)
+## Auto-Generated Credentials
 
-Each service exposes its own Swagger UI when running locally:
+When admin creates a student, faculty, or parent, a login account is automatically created:
 
-| Service           | URL                                     |
-|-------------------|-----------------------------------------|
-| Auth              | http://localhost:8081/swagger-ui.html   |
-| Student           | http://localhost:8082/swagger-ui.html   |
-| Faculty           | http://localhost:8083/swagger-ui.html   |
-| Attendance        | http://localhost:8084/swagger-ui.html   |
-| Marks             | http://localhost:8085/swagger-ui.html   |
-| Course            | http://localhost:8086/swagger-ui.html   |
-| Notification      | http://localhost:8087/swagger-ui.html   |
-| Parent            | http://localhost:8088/swagger-ui.html   |
-| Admin             | http://localhost:8089/swagger-ui.html   |
-| Face Recognition  | http://localhost:8090/swagger-ui.html   |
+| Person created | Login username | Default password | Must change? |
+|---|---|---|---|
+| Student | Enrollment number (e.g. ENR2601000001) | Password@123 | Yes |
+| Faculty | Employee ID (e.g. FAC010001) | Password@123 | Yes |
+| Parent | Email prefix (e.g. john.doe from john.doe@gmail.com) | Password@123 | Yes |
+
+The response from the create endpoint includes the generated username:
+```json
+{
+  "message": "Student created. Login: ENR2601000001 | Default password: Password@123",
+  "data": { ... }
+}
+```
 
 ---
 
-## Face Recognition Setup
+## Seed Data (2026)
 
-The LBPH model requires OpenCV native libraries. The `javacv-platform` Maven dependency bundles them.
+On first startup, the following data is seeded automatically:
 
-**Download the Haar cascade file:**
+**Departments:** CS, IT, EC, MECH
+
+**Courses:** B.Tech CS, B.Tech IT, M.Tech CS, B.Tech Mech
+
+**Subjects:** 24 subjects across Semesters 1–6 for B.Tech CS
+
+**Batches (as of 2026):**
+- CS-A-2026, CS-B-2026 → Semester 1 (just started)
+- CS-A-2025, CS-B-2025 → Semester 3 (second year)
+- CS-A-2024 → Semester 5 (third year)
+- CS-A-2023 → Semester 7 (final year)
+
+---
+
+## Docker Commands
+
 ```bash
-curl -L https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml \
-  -o face-recognition-service/src/main/resources/haarcascade_frontalface_default.xml
-```
-
-**Tips for good recognition:**
-- Enroll 8–10 photos per student with varied lighting/angles
-- Use 200×200 grayscale internally (handled automatically)
-- Confidence threshold of 80 works well; lower it (e.g. 70) for stricter matching
-- Retrain the model (`POST /api/face/train`) after any new enrollments
-
----
-
-## Kafka Topics
-
-| Topic               | Producer          | Consumer             | Purpose                          |
-|---------------------|-------------------|----------------------|----------------------------------|
-| `attendance-events` | Attendance Svc    | Notification Svc     | Shortfall alerts to students     |
-| `marks-events`      | Marks Svc         | Notification Svc     | Marks upload notifications       |
-| `general-events`    | Admin Svc         | Notification Svc     | Broadcasts and announcements     |
-
-Monitor topics at: **http://localhost:8888** (Kafka UI)
-
----
-
-## Technology Stack
-
-| Layer            | Technology                                      |
-|------------------|-------------------------------------------------|
-| Language         | Java 17                                         |
-| Framework        | Spring Boot 3.2, Spring Cloud 2023.0            |
-| Service Discovery| Netflix Eureka                                  |
-| API Gateway      | Spring Cloud Gateway                            |
-| Security         | Spring Security + JWT (jjwt 0.11.5)             |
-| ORM              | Spring Data JPA / Hibernate                     |
-| Database         | MySQL 8.0 (schema-per-service)                  |
-| Messaging        | Apache Kafka                                    |
-| AI / Vision      | JavaCV 1.5.9 + OpenCV (LBPH algorithm)          |
-| Inter-service    | OpenFeign (sync) + Kafka (async)                |
-| Documentation    | SpringDoc OpenAPI / Swagger UI                  |
-| Build            | Maven (multi-module)                            |
-| Containerisation | Docker + Docker Compose                         |
-
----
-
-## Project Structure
-
-```
-college-erp/
-├── pom.xml                        ← Parent POM (all modules declared here)
-├── docker-compose.yml
-├── init-db.sql
-├── eureka-server/                 ← Service registry :8761
-├── api-gateway/                   ← Entry point :8080, JWT filter
-├── auth-service/                  ← Login/register/tokens :8081
-├── student-service/               ← Student CRUD :8082
-├── faculty-service/               ← Faculty + assignments :8083
-├── attendance-service/            ← Attendance + sessions :8084
-├── marks-service/                 ← Marks + grades :8085
-├── course-service/                ← Dept/Course/Subject/Batch :8086
-├── notification-service/          ← Kafka consumer + email :8087
-├── parent-service/                ← Parent portal :8088
-├── admin-service/                 ← Dashboard aggregation :8089
-└── face-recognition-service/      ← LBPH AI model :8090
+docker-compose up -d          # Start all
+docker-compose down           # Stop all (keeps data)
+docker-compose down -v        # Stop and delete all data
+docker-compose logs -f erp-main       # Watch main service
+docker-compose logs -f erp-notification  # Watch notifications
+docker-compose ps             # Check status
 ```
 
 ---
 
-## Role-Based Access Summary
+## Swagger UI
 
-| Endpoint Area              | ADMIN | FACULTY | STUDENT | PARENT |
-|----------------------------|-------|---------|---------|--------|
-| User management            | ✅    | ❌      | ❌      | ❌     |
-| Department/Course/Subject  | ✅    | ❌      | 👁      | ❌     |
-| Student profiles           | ✅    | 👁      | Own     | Own child|
-| Faculty profiles           | ✅    | Own     | ❌      | ❌     |
-| Mark attendance            | ✅    | ✅      | ❌      | ❌     |
-| Upload marks               | ✅    | ✅      | ❌      | ❌     |
-| View own marks/attendance  | ✅    | ✅      | ✅      | ✅     |
-| Face enroll/train          | ✅    | ❌      | ❌      | ❌     |
-| Face recognition session   | ✅    | ✅      | ❌      | ❌     |
-| Defaulter report           | ✅    | 👁      | ❌      | ❌     |
-| Broadcast announcements    | ✅    | ❌      | ❌      | ❌     |
-
-*(Role enforcement is done via the `X-User-Role` header injected by the API Gateway after JWT validation)*
+```
+http://localhost:8081/swagger-ui.html   — Main ERP service
+http://localhost:8082/swagger-ui.html   — Notification service
+http://localhost:8761                    — Eureka dashboard (eureka/eureka-secret)
+http://localhost:8888                    — Kafka UI
+```
