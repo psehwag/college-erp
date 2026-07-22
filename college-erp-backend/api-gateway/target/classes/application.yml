@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # Public auth endpoints - no JWT required
+        - id: auth-public
+          uri: lb://college-erp-service
+          predicates:
+            - Path=/api/auth/login,/api/auth/refresh-token
+          filters:
+            - StripPrefix=0
+
+        # Notification service — MUST be listed before the generic /api/**
+        # catch-all below, otherwise Spring Cloud Gateway matches the first
+        # route whose predicate fits and every /api/notifications/** request
+        # would be sent to college-erp-service instead (404 -> frontend crash).
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+        # All other protected ERP routes
+        - id: erp-protected
+          uri: lb://college-erp-service
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=0
+            - name: JwtAuthFilter
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-secret@erp-eureka:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+
+jwt:
+  secret: 4e3b2a1d0c9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

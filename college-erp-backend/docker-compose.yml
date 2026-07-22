@@ -3,33 +3,19 @@ networks:
     driver: bridge
 
 volumes:
-  mysql-data:
   kafka-data:
   face-models:
 
 services:
 
   # ── MySQL ─────────────────────────────────────────────────────────────────
-  mysql:
-    image: mysql:8.0
-    container_name: erp-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_CHARACTER_SET_SERVER: utf8mb4
-      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    networks:
-      - erp-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+  # Not containerized — services connect to the locally installed MySQL on
+  # the host machine via Docker Desktop's host.docker.internal DNS name.
+  # Make sure your local MySQL:
+  #   - listens on 0.0.0.0 (bind-address), not just 127.0.0.1
+  #   - has a root user that accepts TCP connections from a remote host
+  #     (root@'%' or an equivalent grant), since host.docker.internal
+  #     arrives as a non-localhost connection
 
   # ── Kafka (KRaft mode — no Zookeeper) ────────────────────────────────────
   kafka:
@@ -126,7 +112,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://erp-mysql:3306/erp_main?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/erp_main?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_KAFKA_BOOTSTRAP_SERVERS: erp-kafka:9092
@@ -134,12 +120,13 @@ services:
       FACE_MODEL_PATH: /app/face-models
     volumes:
       - face-models:/app/face-models
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
-      - kafka
+      kafka:
+        condition: service_started
     networks:
       - erp-network
     deploy:
@@ -157,19 +144,20 @@ services:
     ports:
       - "8082:8082"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://erp-mysql:3306/erp_notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/erp_notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_KAFKA_BOOTSTRAP_SERVERS: erp-kafka:9092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eureka-secret@erp-eureka:8761/eureka/
       MAIL_USERNAME: ${MAIL_USERNAME:-your-email@gmail.com}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-your-app-password}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
-      - kafka
+      kafka:
+        condition: service_started
     networks:
       - erp-network
     deploy:
