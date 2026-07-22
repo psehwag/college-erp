@@ -11,8 +11,10 @@ RUN mvn -pl college-erp-service -am clean package -DskipTests -q
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 # javacv-platform ships glibc-linked OpenCV/FFmpeg native libs (needs a real
-# glibc base, not Alpine/musl) plus libgomp for OpenBLAS's OpenMP threading.
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/* \
+# glibc base, not Alpine/musl): libgomp for OpenBLAS's OpenMP threading, and
+# libgtk2.0-0 because CascadeClassifier (objdetect) transitively loads the
+# opencv_highgui module even though this headless service never uses it.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libgtk2.0-0 && rm -rf /var/lib/apt/lists/* \
     && groupadd -r erp && useradd -r -g erp erp
 COPY --from=builder /app/college-erp-service/target/*.jar app.jar
 RUN chown erp:erp app.jar
