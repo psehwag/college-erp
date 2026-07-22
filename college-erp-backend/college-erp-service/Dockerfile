@@ -1,6 +1,11 @@
 FROM eclipse-temurin:17-jdk-jammy AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends maven && rm -rf /var/lib/apt/lists/*
+# Ubuntu's mirror pool for archive.ubuntu.com round-robins several IPs; on
+# some networks most of them refuse connections while one works, so apt
+# needs to fail fast on the dead ones and retry rather than hang on the
+# default (long) per-connection timeout.
+RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "10"; Acquire::https::Timeout "10";' > /etc/apt/apt.conf.d/80-retries \
+    && apt-get update && apt-get install -y --no-install-recommends maven && rm -rf /var/lib/apt/lists/*
 COPY pom.xml .
 COPY eureka-server/pom.xml eureka-server/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
@@ -14,7 +19,8 @@ WORKDIR /app
 # glibc base, not Alpine/musl): libgomp for OpenBLAS's OpenMP threading, and
 # libgtk2.0-0 because CascadeClassifier (objdetect) transitively loads the
 # opencv_highgui module even though this headless service never uses it.
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libgtk2.0-0 && rm -rf /var/lib/apt/lists/* \
+RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "10"; Acquire::https::Timeout "10";' > /etc/apt/apt.conf.d/80-retries \
+    && apt-get update && apt-get install -y --no-install-recommends libgomp1 libgtk2.0-0 && rm -rf /var/lib/apt/lists/* \
     && groupadd -r erp && useradd -r -g erp erp
 COPY --from=builder /app/college-erp-service/target/*.jar app.jar
 RUN chown erp:erp app.jar
