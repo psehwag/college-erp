@@ -12,9 +12,6 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
   kafka:
     bootstrap-servers: erp-kafka:9092
     consumer:
