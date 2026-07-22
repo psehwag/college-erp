@@ -1,6 +1,8 @@
 package com.erp.auth.repository;
 
 import com.erp.auth.entity.User;
+import com.erp.auth.entity.User.Role;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -21,8 +24,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
 
-    java.util.List<User> findByRole(User.Role role);
-    java.util.List<User> findByRoleInAndIsActiveTrue(java.util.List<User.Role> roles);
+    List<User> findByRole(Role role);
+    List<User> findByRoleInAndIsActiveTrue(List<Role> roles);
     long countByRole(Role role);
 
     @Modifying
