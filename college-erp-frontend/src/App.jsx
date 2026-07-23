@@ -70,7 +70,6 @@ export default function App() {
             <Route path="/admin/marks"        element={<MarksPage />} />
             <Route path="/admin/defaulters"   element={<DefaultersPage />} />
             <Route path="/admin/face"         element={<FaceEnrollPage />} />
-            <Route path="/notifications"      element={<NotificationsPage />} />
           </Route>
 
           {/* Faculty */}
@@ -78,7 +77,6 @@ export default function App() {
             <Route path="/faculty"            element={<FacultyDashboard />} />
             <Route path="/faculty/attendance" element={<AttendancePage />} />
             <Route path="/faculty/marks"      element={<MarksPage />} />
-            <Route path="/notifications"      element={<NotificationsPage />} />
           </Route>
 
           {/* Student */}
@@ -86,7 +84,6 @@ export default function App() {
             <Route path="/student"            element={<StudentDashboard />} />
             <Route path="/student/attendance" element={<StudentAttendancePage />} />
             <Route path="/student/marks"      element={<StudentMarksPage />} />
-            <Route path="/notifications"      element={<NotificationsPage />} />
           </Route>
 
           {/* Parent */}
@@ -94,7 +91,15 @@ export default function App() {
             <Route path="/parent"             element={<ParentDashboard />} />
             <Route path="/parent/attendance"  element={<ParentAttendancePage />} />
             <Route path="/parent/marks"       element={<ParentMarksPage />} />
-            <Route path="/notifications"      element={<NotificationsPage />} />
+          </Route>
+
+          {/* Notifications — shared across all authenticated roles. Declared
+              once here, not duplicated per-role above: React Router resolves
+              ties between identically-specific routes by declaration order,
+              so four separate "/notifications" entries would always resolve
+              to the first (ADMIN) one regardless of the real logged-in role. */}
+          <Route element={<AppShell allowedRoles={['ADMIN','FACULTY','STUDENT','PARENT']} />}>
+            <Route path="/notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { marksAPI, studentAPI } from '../../services/api';
+import { marksAPI, studentAPI, facultyAPI } from '../../services/api';
 import AcademicCascadeSelect from '../../components/common/AcademicCascadeSelect';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -9,6 +9,7 @@ const GRADE_COLOR = { O:'badge-blue', A_PLUS:'badge-green', A:'badge-green', B_P
 
 export default function MarksPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [sel, setSel]           = useState({});
   const [students, setStudents] = useState([]);
   const [marks, setMarks]       = useState({});   // { studentId: value }
@@ -18,7 +19,22 @@ export default function MarksPage() {
   const [searching, setSearching] = useState(false);
   const [view, setView]         = useState('upload'); // 'upload' | 'view'
 
-  const isReady = sel.departmentId && sel.courseId && sel.semester && sel.subjectId && sel.batchId;
+  // ADMIN isn't a faculty member, so there's no natural facultyId to
+  // attribute the marking to — let admin pick one explicitly.
+  const [facultyOptions, setFacultyOptions] = useState([]);
+  const [selectedFacultyId, setSelectedFacultyId] = useState('');
+  const facultyId = isAdmin ? (selectedFacultyId ? +selectedFacultyId : null) : (user?.referenceId || null);
+
+  useEffect(() => {
+    if (!isAdmin || !sel.departmentId) { setFacultyOptions([]); return; }
+    setSelectedFacultyId('');
+    facultyAPI.getByDept(sel.departmentId)
+      .then(r => setFacultyOptions(r.data.data || []))
+      .catch(() => setFacultyOptions([]));
+  }, [isAdmin, sel.departmentId]);
+
+  const isReady = sel.departmentId && sel.courseId && sel.semester && sel.subjectId && sel.batchId
+    && (!isAdmin || selectedFacultyId);
 
   useEffect(() => {
     if (!sel.batchId) { setStudents([]); return; }
@@ -42,7 +58,9 @@ export default function MarksPage() {
   };
 
   const submit = async () => {
-    if (!isReady) return toast.error('Select department, course, semester, subject and batch');
+    if (!isReady) return toast.error(isAdmin
+      ? 'Select department, course, semester, subject, batch and faculty'
+      : 'Select department, course, semester, subject and batch');
     const studentMarks = students
       .filter(s => marks[s.id] !== '')
       .map(s => ({ studentId: s.id, marksObtained: +marks[s.id] }));
@@ -51,7 +69,7 @@ export default function MarksPage() {
     try {
       await marksAPI.bulkUpsert({
         subjectId: +sel.subjectId,
-        facultyId: user?.referenceId || null,
+        facultyId,
         batchId: +sel.batchId,
         semester: +sel.semester,
         maxMarks: +maxMarks,
@@ -80,6 +98,16 @@ export default function MarksPage() {
 
       <div className="card mb-4">
         <AcademicCascadeSelect value={sel} onChange={setSel} />
+        {isAdmin && (
+          <div className="form-group" style={{ marginTop:12, maxWidth:280 }}>
+            <label className="form-label">Faculty (attribute this marking to)</label>
+            <select className="form-select" value={selectedFacultyId} disabled={!sel.departmentId}
+              onChange={e => setSelectedFacultyId(e.target.value)}>
+              <option value="">Select faculty</option>
+              {facultyOptions.map(f => <option key={f.id} value={f.id}>{f.fullName}</option>)}
+            </select>
+          </div>
+        )}
         {view === 'upload' && (
           <div className="form-group" style={{ marginTop:12, maxWidth:200 }}>
             <label className="form-label">Max marks</label>

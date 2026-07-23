@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { attendanceAPI, faceAPI, studentAPI } from '../../services/api';
+import { attendanceAPI, faceAPI, studentAPI, facultyAPI } from '../../services/api';
 import AcademicCascadeSelect from '../../components/common/AcademicCascadeSelect';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -9,6 +9,7 @@ const STATUS_COLOR   = { PRESENT:'badge-green', ABSENT:'badge-red', LATE:'badge-
 
 export default function AttendancePage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [mode, setMode]         = useState('manual'); // 'manual' | 'face'
   const [sel, setSel]           = useState({});        // dept/course/semester/subject/batch
   const [students, setStudents] = useState([]);
@@ -21,6 +22,20 @@ export default function AttendancePage() {
   const webcamRef               = useRef(null);
   const intervalRef             = useRef(null);
   const streamRef                = useRef(null);
+
+  // ADMIN isn't a faculty member, so there's no natural facultyId to
+  // attribute the marking to — let admin pick one explicitly.
+  const [facultyOptions, setFacultyOptions] = useState([]);
+  const [selectedFacultyId, setSelectedFacultyId] = useState('');
+  const facultyId = isAdmin ? (selectedFacultyId ? +selectedFacultyId : null) : (user?.referenceId || null);
+
+  useEffect(() => {
+    if (!isAdmin || !sel.departmentId) { setFacultyOptions([]); return; }
+    setSelectedFacultyId('');
+    facultyAPI.getByDept(sel.departmentId)
+      .then(r => setFacultyOptions(r.data.data || []))
+      .catch(() => setFacultyOptions([]));
+  }, [isAdmin, sel.departmentId]);
 
   // Load students whenever the batch changes
   useEffect(() => {
@@ -36,15 +51,18 @@ export default function AttendancePage() {
       }).catch(() => {});
   }, [sel.batchId]);
 
-  const isReady = sel.departmentId && sel.courseId && sel.semester && sel.subjectId && sel.batchId;
+  const isReady = sel.departmentId && sel.courseId && sel.semester && sel.subjectId && sel.batchId
+    && (!isAdmin || selectedFacultyId);
 
   // ── Manual submit ──────────────────────────────────────────────────────
   const submitManual = async () => {
-    if (!isReady) return toast.error('Select department, course, semester, subject and batch');
+    if (!isReady) return toast.error(isAdmin
+      ? 'Select department, course, semester, subject, batch and faculty'
+      : 'Select department, course, semester, subject and batch');
     setSaving(true);
     try {
       await attendanceAPI.markBulk({
-        facultyId: user?.referenceId || null,
+        facultyId,
         subjectId: +sel.subjectId,
         batchId: +sel.batchId,
         attendanceDate: date,
@@ -85,10 +103,12 @@ export default function AttendancePage() {
 
   // ── Face recognition session ───────────────────────────────────────────
   const startFaceSession = async () => {
-    if (!isReady) return toast.error('Select department, course, semester, subject and batch');
+    if (!isReady) return toast.error(isAdmin
+      ? 'Select department, course, semester, subject, batch and faculty'
+      : 'Select department, course, semester, subject and batch');
     try {
       const res = await attendanceAPI.startSession({
-        facultyId: user?.referenceId || null,
+        facultyId,
         subjectId: +sel.subjectId,
         batchId: +sel.batchId
       });
@@ -134,7 +154,7 @@ export default function AttendancePage() {
         const res = await faceAPI.recognize({
           batchId: +sel.batchId,
           subjectId: +sel.subjectId,
-          facultyId: user?.referenceId || null,
+          facultyId,
           sessionToken: session?.sessionToken,
           frameBase64: b64
         });
@@ -142,7 +162,7 @@ export default function AttendancePage() {
         if (recognized && studentId) {
           await attendanceAPI.markByFace({
             studentId, subjectId: +sel.subjectId,
-            facultyId: user?.referenceId || null,
+            facultyId,
             batchId: +sel.batchId,
             sessionToken: session?.sessionToken,
             confidenceScore
@@ -154,7 +174,7 @@ export default function AttendancePage() {
       } catch {}
     }, 2000);
     return () => clearInterval(intervalRef.current);
-  }, [scanning, session, sel, students, user]);
+  }, [scanning, session, sel, students, facultyId]);
 
   const summary = Object.values(records).reduce((acc, v) => {
     acc[v] = (acc[v] || 0) + 1; return acc;
@@ -176,6 +196,16 @@ export default function AttendancePage() {
       {/* Cascading selector */}
       <div className="card mb-4">
         <AcademicCascadeSelect value={sel} onChange={setSel} />
+        {isAdmin && (
+          <div className="form-group" style={{ marginTop:12, maxWidth:280 }}>
+            <label className="form-label">Faculty (attribute this marking to)</label>
+            <select className="form-select" value={selectedFacultyId} disabled={!sel.departmentId}
+              onChange={e => setSelectedFacultyId(e.target.value)}>
+              <option value="">Select faculty</option>
+              {facultyOptions.map(f => <option key={f.id} value={f.id}>{f.fullName}</option>)}
+            </select>
+          </div>
+        )}
         {mode === 'manual' && (
           <div className="form-group" style={{ marginTop:12, maxWidth:220 }}>
             <label className="form-label">Date</label>

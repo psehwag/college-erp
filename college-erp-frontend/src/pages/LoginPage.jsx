@@ -22,7 +22,7 @@ export default function LoginPage() {
         nav('/change-password');
         return;
       }
-      toast.success(`Welcome back, ${user.username}!`);
+      toast.success(`Welcome back, ${user.name}!`);
       nav(roleHome[user.role] || '/');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid credentials');

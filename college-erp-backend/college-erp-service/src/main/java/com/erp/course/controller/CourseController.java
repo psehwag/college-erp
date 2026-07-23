@@ -181,7 +181,7 @@ public class CourseController {
     public ResponseEntity<ApiResponse<Subject>> getSubject(
             @RequestHeader("X-User-Role") String role,
             @PathVariable Long id) {
-        RoleGuard.requireAnyRole(role, "ADMIN", "FACULTY", "STUDENT");
+        RoleGuard.requireAnyRole(role, "ADMIN", "FACULTY", "STUDENT", "PARENT");
         return ResponseEntity.ok(ApiResponse.success("Subject", courseService.getSubjectById(id)));
     }
 
