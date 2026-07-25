@@ -23,6 +23,12 @@ export default function AttendancePage() {
   const intervalRef             = useRef(null);
   const streamRef                = useRef(null);
 
+  // Face mode's own recognition log — kept separate from `records` (which
+  // defaults every student to PRESENT the moment a batch loads) so it only
+  // ever reflects genuine recognition events, not that stale default.
+  const [recognizedIds, setRecognizedIds] = useState(new Set());
+  const [lastScanStatus, setLastScanStatus] = useState('');
+
   // ADMIN isn't a faculty member, so there's no natural facultyId to
   // attribute the marking to — let admin pick one explicitly.
   const [facultyOptions, setFacultyOptions] = useState([]);
@@ -47,7 +53,11 @@ export default function AttendancePage() {
         const init = {};
         list.forEach(s => { init[s.id] = 'PRESENT'; });
         setRecords(init);
-        setSelectedIds(new Set());
+        // Everyone starts checked — submission includes the whole roster
+        // by default, and unchecking someone excludes just them.
+        setSelectedIds(new Set(list.map(s => s.id)));
+        setRecognizedIds(new Set());
+        setLastScanStatus('');
       }).catch(() => {});
   }, [sel.batchId]);
 
@@ -59,6 +69,7 @@ export default function AttendancePage() {
     if (!isReady) return toast.error(isAdmin
       ? 'Select department, course, semester, subject, batch and faculty'
       : 'Select department, course, semester, subject and batch');
+    if (selectedIds.size === 0) return toast.error('Check at least one student to submit');
     setSaving(true);
     try {
       await attendanceAPI.markBulk({
@@ -66,9 +77,11 @@ export default function AttendancePage() {
         subjectId: +sel.subjectId,
         batchId: +sel.batchId,
         attendanceDate: date,
-        studentMarks: students.map(s => ({ studentId: s.id, status: records[s.id] || 'ABSENT' }))
+        studentMarks: students
+          .filter(s => selectedIds.has(s.id))
+          .map(s => ({ studentId: s.id, status: records[s.id] || 'ABSENT' }))
       });
-      toast.success(`Attendance marked for ${students.length} students`);
+      toast.success(`Attendance marked for ${selectedIds.size} students`);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to mark attendance');
     } finally { setSaving(false); }
@@ -113,6 +126,8 @@ export default function AttendancePage() {
         batchId: +sel.batchId
       });
       setSession(res.data.data);
+      setRecognizedIds(new Set());
+      setLastScanStatus('');
 
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       streamRef.current = stream;
@@ -142,7 +157,10 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!scanning) return;
     intervalRef.current = setInterval(async () => {
-      if (!webcamRef.current || !webcamRef.current.videoWidth) return;
+      if (!webcamRef.current || !webcamRef.current.videoWidth) {
+        setLastScanStatus('Waiting for camera…');
+        return;
+      }
       try {
         const canvas = document.createElement('canvas');
         const video  = webcamRef.current;
@@ -158,23 +176,34 @@ export default function AttendancePage() {
           sessionToken: session?.sessionToken,
           frameBase64: b64
         });
-        const { recognized, studentId, confidenceScore } = res.data.data;
+        const { recognized, studentId, confidenceScore, message } = res.data.data;
+
         if (recognized && studentId) {
-          await attendanceAPI.markByFace({
-            studentId, subjectId: +sel.subjectId,
-            facultyId,
-            batchId: +sel.batchId,
-            sessionToken: session?.sessionToken,
-            confidenceScore
-          });
-          const s = students.find(st => st.id === studentId);
-          toast.success(`✓ ${s?.fullName || 'Student'} marked present (${Math.round(confidenceScore)}%)`);
-          setRecords(r => ({ ...r, [studentId]: 'PRESENT' }));
+          setLastScanStatus(`Recognised (${Math.round(confidenceScore)}%)`);
+          // Already marked this session — skip the redundant API call.
+          if (!recognizedIds.has(studentId)) {
+            await attendanceAPI.markByFace({
+              studentId, subjectId: +sel.subjectId,
+              facultyId,
+              batchId: +sel.batchId,
+              sessionToken: session?.sessionToken,
+              confidenceScore
+            });
+            const s = students.find(st => st.id === studentId);
+            toast.success(`✓ ${s?.fullName || 'Student'} marked present (${Math.round(confidenceScore)}%)`);
+            setRecognizedIds(prev => new Set(prev).add(studentId));
+            setRecords(r => ({ ...r, [studentId]: 'PRESENT' }));
+          }
+        } else {
+          setLastScanStatus(message || 'No face recognised in this frame');
         }
-      } catch {}
+      } catch (err) {
+        console.error('Face recognition tick failed:', err);
+        setLastScanStatus(err.response?.data?.message || 'Recognition request failed — see browser console');
+      }
     }, 2000);
     return () => clearInterval(intervalRef.current);
-  }, [scanning, session, sel, students, facultyId]);
+  }, [scanning, session, sel, students, facultyId, recognizedIds]);
 
   const summary = Object.values(records).reduce((acc, v) => {
     acc[v] = (acc[v] || 0) + 1; return acc;
@@ -247,6 +276,11 @@ export default function AttendancePage() {
               Camera captures a frame every 2 seconds. Recognised faces from this batch's trained
               model are automatically marked present.
             </p>
+            {scanning && (
+              <p style={{ fontSize:12, color:'var(--text-muted)', marginTop:8, fontStyle:'italic' }}>
+                Last scan: {lastScanStatus || '…'}
+              </p>
+            )}
           </div>
 
           <div className="card">
@@ -254,15 +288,17 @@ export default function AttendancePage() {
               Recognition log
             </h3>
             <div style={{ display:'flex', gap:12, marginBottom:16 }}>
-              {Object.entries(summary).map(([k,v]) => (
-                <div key={k} style={{ textAlign:'center' }}>
-                  <div style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:700 }}>{v}</div>
-                  <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase' }}>{k}</div>
-                </div>
-              ))}
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:700 }}>{recognizedIds.size}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase' }}>Recognised</div>
+              </div>
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:700 }}>{students.length - recognizedIds.size}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase' }}>Remaining</div>
+              </div>
             </div>
             <div style={{ maxHeight:320, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
-              {students.filter(s => records[s.id] === 'PRESENT').map(s => (
+              {students.filter(s => recognizedIds.has(s.id)).map(s => (
                 <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
                   background:'var(--success-soft)', borderRadius:8 }}>
                   <span style={{ fontSize:18 }}>✓</span>
@@ -272,7 +308,7 @@ export default function AttendancePage() {
                   </div>
                 </div>
               ))}
-              {students.filter(s => records[s.id] === 'PRESENT').length === 0 && (
+              {recognizedIds.size === 0 && (
                 <div className="empty-state" style={{ padding:24 }}>
                   <div className="empty-icon">📷</div>
                   <p>No faces recognised yet</p>
@@ -335,8 +371,8 @@ export default function AttendancePage() {
                   );
                 })}
               </div>
-              <button className="btn btn-primary" onClick={submitManual} disabled={saving}>
-                {saving ? <><span className="spinner" /> Saving…</> : `✓ Submit attendance for ${students.length} students`}
+              <button className="btn btn-primary" onClick={submitManual} disabled={saving || selectedIds.size === 0}>
+                {saving ? <><span className="spinner" /> Saving…</> : `✓ Submit attendance for ${selectedIds.size} students`}
               </button>
             </>
           )}
